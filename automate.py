@@ -34,23 +34,44 @@ LIGHT_GREEN  = PatternFill("solid", fgColor="E2EFDA")
 LIGHT_YELLOW = PatternFill("solid", fgColor="FFF2CC")
 LIGHT_RED    = PatternFill("solid", fgColor="FCE4EC")
 
-# ── 模拟数据（后续可从 CSV / 数据库读取） ──────────────
-CANDIDATES = [
-    {"name": "张三",   "phone": "13800001001", "subject": "数学", "school": "云南昭通某小学", "available": "全天"},
-    {"name": "李四",   "phone": "13800001002", "subject": "语文", "school": "四川凉山某小学", "available": "上午"},
-    {"name": "王五",   "phone": "13800001003", "subject": "英语", "school": "贵州毕节某小学", "available": "下午"},
-    {"name": "赵六",   "phone": "13800001004", "subject": "数学", "school": "甘肃会宁某小学", "available": "全天"},
-    {"name": "陈七",   "phone": "13800001005", "subject": "科学", "school": "湖南湘西某小学", "available": "上午"},
-]
-
+# ── 数据加载（从 CSV 读取） ──────────────────────────────
+CSV_PATH = "candidates.csv"
 INTERVIEWERS = [
     {"name": "李老师", "role": "项目主管"},
     {"name": "王老师", "role": "教学组长"},
     {"name": "张老师", "role": "心理辅导师"},
 ]
 
+def load_candidates(csv_path: str = CSV_PATH) -> list[dict]:
+    """从 CSV 读取候选人数据。CSV 格式：姓名,手机号,科目,支教学校,可面试时间"""
+    p = Path(csv_path)
+    if not p.exists():
+        logging.warning(f"⚠️ 未找到 {csv_path}，使用示例数据")
+        return [
+            {"name": "张三", "phone": "13800001001", "subject": "数学", "school": "云南昭通某小学", "available": "全天"},
+            {"name": "李四", "phone": "13800001002", "subject": "语文", "school": "四川凉山某小学", "available": "上午"},
+            {"name": "王五", "phone": "13800001003", "subject": "英语", "school": "贵州毕节某小学", "available": "下午"},
+            {"name": "赵六", "phone": "13800001004", "subject": "数学", "school": "甘肃会宁某小学", "available": "全天"},
+            {"name": "陈七", "phone": "13800001005", "subject": "科学", "school": "湖南湘西某小学", "available": "上午"},
+        ]
+
+    import csv
+    candidates = []
+    with p.open(newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            candidates.append({
+                "name": row.get("姓名", row.get("name", "")).strip(),
+                "phone": row.get("手机号", row.get("phone", "")).strip(),
+                "subject": row.get("科目", row.get("subject", "")).strip(),
+                "school": row.get("支教学校", row.get("school", "")).strip(),
+                "available": row.get("可面试时间", row.get("available", "")).strip(),
+            })
+    logging.info(f"📄 已从 {csv_path} 读取 {len(candidates)} 位候选人")
+    return candidates
+
 # ── 1. 面试日程表 ────────────────────────────────────
-def gen_schedule():
+def gen_schedule(candidates: list[dict]):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "面试日程表"
@@ -74,7 +95,7 @@ def gen_schedule():
 
     # 数据行
     base_time = datetime(2026, 8, 10, 9, 0)  # 8月10日9:00开始
-    for i, c in enumerate(CANDIDATES, 1):
+    for i, c in enumerate(candidates, 1):
         row = i + 3
         t = base_time + timedelta(minutes=30 * (i - 1))
         time_str = t.strftime("%m/%d %H:%M")
@@ -104,9 +125,9 @@ def gen_schedule():
 
 
 # ── 2. 面试评估表（每人一份） ──────────────────────────
-def gen_evaluation_sheets():
+def gen_evaluation_sheets(candidates: list[dict]):
     paths = []
-    for c in CANDIDATES:
+    for c in candidates:
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "面试评估表"
@@ -196,7 +217,7 @@ def gen_evaluation_sheets():
 
 
 # ── 3. 面试结果汇总表 ────────────────────────────────
-def gen_summary():
+def gen_summary(candidates: list[dict]):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "面试结果汇总"
@@ -222,7 +243,7 @@ def gen_summary():
     import random
     random.seed(42)
     results = []
-    for i, c in enumerate(CANDIDATES):
+    for i, c in enumerate(candidates):
         score = round(random.uniform(3.0, 5.0), 1)
         passed = score >= 3.5
         status = "✅ 岗前培训" if passed else "❌ 未通过"
@@ -271,9 +292,10 @@ def main():
     logging.info(f"杉树公益 · 面试流程自动化开始 (retry={MAX_RETRIES})")
 
     try:
-        schedule_path = gen_schedule()
-        eval_paths = gen_evaluation_sheets()
-        summary_path, results = gen_summary()
+        candidates = load_candidates()
+        schedule_path = gen_schedule(candidates)
+        eval_paths = gen_evaluation_sheets(candidates)
+        summary_path, results = gen_summary(candidates)
 
         # 生成汇总文件清单作为 artifact
         summary_data = {
