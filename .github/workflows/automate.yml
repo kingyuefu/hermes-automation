@@ -1,0 +1,44 @@
+name: Automation Task
+
+on:
+  workflow_dispatch:        # manual trigger
+  schedule:
+    - cron: '0 6 * * *'    # daily at 6 AM UTC (change as needed)
+
+jobs:
+  run-task:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run automation
+        id: run
+        continue-on-error: true
+        run: python automate.py
+
+      - name: Retry on failure
+        if: steps.run.outcome == 'failure'
+        run: python automate.py --retry 1
+
+      - name: Upload output
+        uses: actions/upload-artifact@v4
+        with:
+          name: automation-output
+          path: output.txt
+          if-no-files-found: warn
+
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "## ❌ Automation failed at $(date)" >> $GITHUB_STEP_SUMMARY
